@@ -72,6 +72,7 @@
 static void
 raw_send(serserv_data_t *si, unsigned char *data, unsigned int len)
 {
+    // HOOK HERE, low rsp handler
     if (si->sysinfo->debug & DEBUG_RAW_MSG)
 	debug_log_raw_msg(si->sysinfo, data, len, "Raw serial send:");
     si->send_out(si, data, len);
@@ -757,10 +758,21 @@ struct vm_data {
 };
 
 static void
+vm_extract_msg(unsigned char *imsg, msg_t *msg, unsigned int *len) {
+    msg->rq_seq = imsg[0];
+    msg->netfn = imsg[1] >> 2;
+    msg->rs_lun = imsg[1] & 0x3;
+    msg->cmd = imsg[2];
+    msg->len = *len - 3;
+    msg->data = imsg + 3;
+}
+
+static void
 vm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 {
+    // HOOK HERE, CHECKSUM AND LENGTH ERRORS
     msg_t msg;
-    
+
     if (si->sysinfo->debug & DEBUG_RAW_MSG)
 	debug_log_raw_msg(si->sysinfo, imsg, len, "Raw serial receive:");
 
@@ -776,13 +788,9 @@ vm_handle_msg(unsigned char *imsg, unsigned int len, serserv_data_t *si)
     len--;
 
     memset(&msg, 0, sizeof(msg));
-    msg.rq_seq = imsg[0];
-    msg.netfn = imsg[1] >> 2;
-    msg.rs_lun = imsg[1] & 0x3;
-    msg.cmd = imsg[2];
-    msg.len = len - 3;
-    msg.data = imsg + 3;
+    vm_extract_msg(imsg, &msg, &len);
 
+    // HOOK HERE, high msg handler
     channel_smi_send(&si->channel, &msg);
 }
 
@@ -830,6 +838,7 @@ vm_handle_cmd(unsigned char *imsg, unsigned int len, serserv_data_t *si)
 static void
 vm_handle_char(unsigned char ch, serserv_data_t *si)
 {
+    // HOOK HERE, ERROR MALFORMED MESSAGE.
     struct vm_data *info = si->codec_info;
     unsigned int len = info->recv_msg_len;
 
@@ -892,12 +901,10 @@ vm_add_char(unsigned char ch, unsigned char *c, unsigned int *pos)
     }
 }
 
-static void
-vm_send(msg_t *imsg, serserv_data_t *si)
-{
+static unsigned int
+vm_prepare_msg(msg_t *imsg, unsigned char* c) {
     unsigned int i;
     unsigned int len = 0;
-    unsigned char c[(IPMI_SIM_MAX_MSG_LENGTH + 7) * 2];
     unsigned char csum;
     unsigned char ch;
 
@@ -913,11 +920,21 @@ vm_send(msg_t *imsg, serserv_data_t *si)
     csum = ipmb_checksum(&imsg->cmd, 1, csum);
 
     for (i = 0; i < imsg->len; i++)
-	vm_add_char(imsg->data[i], c, &len);
+       vm_add_char(imsg->data[i], c, &len);
 
     vm_add_char(-ipmb_checksum(imsg->data, imsg->len, csum), c, &len);
     c[len++] = VM_MSG_CHAR;
 
+    return len;
+}
+
+static void
+vm_send(msg_t *imsg, serserv_data_t *si)
+{
+    unsigned int len;
+    unsigned char c[(IPMI_SIM_MAX_MSG_LENGTH + 7) * 2];
+
+    len = vm_prepare_msg(imsg, c);
     raw_send(si, c, len);
 }
 
@@ -1187,6 +1204,7 @@ serserv_handle_data(serserv_data_t *ser, uint8_t *data, unsigned int len)
 {
     unsigned int i;
 
+    // HOOK HERE, low msg handler
     for (i = 0; i < len; i++)
 	ser->codec->handle_char(data[i], ser);
 }

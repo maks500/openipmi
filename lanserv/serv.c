@@ -172,6 +172,8 @@ channel_smi_send(channel_t *chan, msg_t *msg)
 	unsigned char    msgd[36];
 	unsigned int     msgd_len = sizeof(msgd);
 
+    // HOOK HERE: Msg has some added fields, maybe we can put high hook here ?
+
 	if (chan->oem_intf_recv_handler(chan, nmsg, msgd, &msgd_len)) {
 	    ipmi_handle_smi_rsp(chan, nmsg, msgd, msgd_len);
 	    return 0;

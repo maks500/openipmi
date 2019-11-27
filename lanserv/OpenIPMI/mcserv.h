@@ -344,6 +344,7 @@ int ipmi_emu_register_oi_iana_handler(uint8_t cmd, cmd_handler_f handler,
 #define OPENIPMI_IANA_CMD_SET_HISTORY_RETURN_SIZE	1
 #define OPENIPMI_IANA_CMD_GET_HISTORY_RETURN_SIZE	2
 
+
 /*
  * SOL handling
  */
